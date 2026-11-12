@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Ringkasan Operasional Toko</h4>
+        <p class="text-muted small mb-0">Pantau kesehatan stok, performa penjualan, dan rekomendasi inventaris</p>
+    </div>
+    {% if session.get('role') == 'pemilik' %}
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('export_excel') }}" class="btn btn-outline-success btn-sm d-flex align-items-center gap-1">
+            <i class="bi bi-file-earmark-excel-fill"></i> Ekspor Excel (.xlsx)
+        </a>
+        <a href="{{ url_for('export_pdf') }}" class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1">
+            <i class="bi bi-file-earmark-pdf-fill"></i> Ekspor PDF
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 4 Kartu Statistik -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100 border-0 shadow-sm bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small fw-medium">Total Produk</span>
+                <span class="p-2 rounded bg-light text-primary"><i class="bi bi-boxes"></i></span>
+            </div>
+            <div class="fs-3 fw-bold font-mono">{{ total_produk }}</div>
+            <div class="text-muted small">Katalog aktif di sistem</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100 border-0 shadow-sm bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small fw-medium">Produk Stok Kritis</span>
+                <span class="p-2 rounded bg-danger bg-opacity-10 text-danger"><i class="bi bi-exclamation-triangle-fill"></i></span>
+            </div>
+            <div class="fs-3 fw-bold font-mono text-danger">{{ produk_kritis }}</div>
+            <div class="text-muted small">Segera butuh reorder</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100 border-0 shadow-sm bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small fw-medium">Penjualan Bulan Ini</span>
+                <span class="p-2 rounded bg-success bg-opacity-10 text-success"><i class="bi bi-cash-stack"></i></span>
+            </div>
+            <div class="fs-4 fw-bold font-mono text-success">{{ total_penjualan_bulan_ini|rupiah }}</div>
+            <div class="text-muted small">Total omzet berjalan</div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100 border-0 shadow-sm bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small fw-medium">Margin Rata-rata</span>
+                <span class="p-2 rounded bg-info bg-opacity-10 text-info"><i class="bi bi-percent"></i></span>
+            </div>
+            <div class="fs-3 fw-bold font-mono">{{ "%.1f"|format(avg_margin) }}%</div>
+            <div class="text-muted small">Keuntungan kotor rata-rata</div>
+        </div>
+    </div>
+</div>
+
+<!-- Grafik Interaktif Tren Penjualan vs Prediksi -->
+<div class="card p-3 mb-4 shadow-sm">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+        <div>
+            <h6 class="fw-bold mb-0">Tren Penjualan Historis vs Hasil Prediksi</h6>
+            <span class="text-muted small">Pilih produk untuk menganalisis perbandingan aktual dengan proyeksi</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="chartProductSelect" class="small text-muted text-nowrap">Produk:</label>
+            <select id="chartProductSelect" class="form-select form-select-sm" style="min-width: 220px;" onchange="loadChartData(this.value)">
+                {% for p in products %}
+                <option value="{{ p.id }}">{{ p.sku }} - {{ p.nama_produk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div style="height: 320px; position: relative;">
+        <canvas id="salesForecastChart"></canvas>
+    </div>
+
+    <div class="row g-2 mt-2 pt-2 border-top text-center" id="accuracyMetrics">
+        <div class="col-6 col-md-3">
+            <div class="small text-muted">MAD Moving Avg</div>
+            <div class="fw-bold font-mono" id="valMaMad">-</div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="small text-muted">MAPE Moving Avg</div>
+            <div class="fw-bold font-mono" id="valMaMape">-</div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="small text-muted">MAD Exp. Smoothing</div>
+            <div class="fw-bold font-mono" id="valEsMad">-</div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="small text-muted">MAPE Exp. Smoothing</div>
+            <div class="fw-bold font-mono" id="valEsMape">-</div>
+        </div>
+    </div>
+</div>
+
+<!-- Dua Kolom Bawah: Status Stok Cepat & Penjualan Terbaru -->
+<div class="row g-3">
+    <!-- Status Inventaris Cepat -->
+    <div class="col-12 col-xl-7">
+        <div class="card p-3 h-100 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0">Status Inventaris & Batas Minimum</h6>
+                <a href="{{ url_for('products_list') }}" class="btn btn-sm btn-link p-0 text-decoration-none">Kelola Semua &rarr;</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>SKU & Produk</th>
+                            <th class="text-center">Stok</th>
+                            <th class="text-center">Batas Min</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end">Aksi Cepat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in products %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ p.nama_produk }}</div>
+                                <span class="text-muted small font-mono">{{ p.sku }}</span>
+                            </td>
+                            <td class="text-center font-mono fw-bold">{{ p.stok_saat_ini }}</td>
+                            <td class="text-center font-mono text-muted">{{ p.batas_stok_min }}</td>
+                            <td class="text-center">
+                                {% if p.status == 'Kritis' %}
+                                    <span class="badge badge-kritis px-2 py-1"><i class="bi bi-x-circle-fill me-1"></i> Kritis</span>
+                                {% elif p.status == 'Waspada' %}
+                                    <span class="badge badge-waspada px-2 py-1"><i class="bi bi-exclamation-circle-fill me-1"></i> Waspada</span>
+                                {% else %}
+                                    <span class="badge badge-aman px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i> Aman</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('restock_forecasting', product_id=p.id) }}" class="btn btn-outline-primary btn-sm py-1 px-2" style="font-size: 0.75rem;">
+                                    Prediksi Restock
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Penjualan Terakhir & Info Event -->
+    <div class="col-12 col-xl-5">
+        <div class="card p-3 mb-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0">Penjualan Terbaru</h6>
+                <a href="{{ url_for('sales_list') }}" class="btn btn-sm btn-link p-0 text-decoration-none">Lihat Semua &rarr;</a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for s in recent_sales %}
+                <div class="list-group-item px-0 py-2 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold small">{{ s.nama_produk }}</div>
+                            <span class="text-muted" style="font-size: 0.75rem;">{{ s.tanggal_penjualan|tgl_indo }} · {{ s.jumlah_terjual }} pcs</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold font-mono small text-success">{{ s.total_harga|rupiah }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-3 text-muted small">Belum ada transaksi penjualan</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card p-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0">Event Promosi & Pengali Permintaan</h6>
+                {% if session.get('role') == 'pemilik' %}
+                <a href="{{ url_for('events_management') }}" class="btn btn-sm btn-link p-0 text-decoration-none">+ Tambah Event</a>
+                {% endif %}
+            </div>
+            <div class="d-flex flex-column gap-2">
+                {% for ev in events %}
+                <div class="p-2 rounded border bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold small">{{ ev.nama_event }}</div>
+                        <span class="text-muted" style="font-size: 0.72rem;">{{ ev.tanggal_mulai|tgl_indo }} s.d {{ ev.tanggal_selesai|tgl_indo }}</span>
+                    </div>
+                    <span class="badge bg-primary font-mono">+{{ ((ev.faktor_pengali - 1.0) * 100)|round|int }}% ({{ ev.faktor_pengali }}x)</span>
+                </div>
+                {% else %}
+                <div class="text-muted small">Belum ada event promosi.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let chartInstance = null;
+
+function loadChartData(productId) {
+    fetch('/api/chart/sales-forecast/' + productId)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.message || 'Gagal memuat data grafik.');
+                return;
+            }
+
+            document.getElementById('valMaMad').innerText = data.ma_mad;
+            document.getElementById('valMaMape').innerText = data.ma_mape + '%';
+            document.getElementById('valEsMad').innerText = data.es_mad;
+            document.getElementById('valEsMape').innerText = data.es_mape + '%';
+
+            const ctx = document.getElementById('salesForecastChart').getContext('2d');
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Penjualan Aktual (Unit)',
+                            data: data.actual,
+                            borderColor: '#0F172A',
+                            backgroundColor: '#0F172A',
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Prediksi Moving Average (N=3)',
+                            data: data.ma,
+                            borderColor: '#2563EB',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'Prediksi Exponential Smoothing (α=0.3)',
+                            data: data.es,
+                            borderColor: '#10B981',
+                            borderDash: [3, 3],
+                            borderWidth: 2,
+                            tension: 0.2,
+                            pointRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: { family: 'Plus Jakarta Sans', size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y + ' unit';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { font: { family: 'JetBrains Mono' } },
+                            grid: { color: '#F1F5F9' }
+                        },
+                        x: {
+                            ticks: { font: { family: 'Plus Jakarta Sans' } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(err => console.error(err));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sel = document.getElementById('chartProductSelect');
+    if (sel && sel.value) {
+        loadChartData(sel.value);
+    }
+});
+</script>
+{% endblock %}

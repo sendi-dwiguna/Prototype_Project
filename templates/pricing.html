@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Dynamic Pricing (Penyesuaian Harga Dinamis){% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Rekomendasi Penyesuaian Harga (Dynamic Pricing)</h4>
+        <p class="text-muted small mb-0">Optimasi pendapatan & perputaran stok berdasarkan sales velocity dan level inventaris riil</p>
+    </div>
+    {% if session.get('role') == 'pemilik' %}
+    <span class="badge bg-primary px-3 py-2 small d-inline-flex align-items-center gap-1">
+        <i class="bi bi-shield-check"></i> Mode Otorisasi: Pemilik Toko
+    </span>
+    {% endif %}
+</div>
+
+<!-- Info Aturan Dynamic Pricing -->
+<div class="card p-3 mb-4 shadow-sm border-0 bg-white">
+    <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-8">
+            <h6 class="fw-bold text-dark mb-1"><i class="bi bi-cpu text-primary me-1"></i> Logika Algoritma Dynamic Pricing Restokin</h6>
+            <p class="small text-muted mb-0">
+                1. <strong>Stok Menipis & Penjualan Cepat:</strong> Rekomendasi kenaikan harga (+10%) untuk mengamankan margin dan memperpanjang ketersediaan inventaris.<br>
+                2. <strong>Stok Menumpuk & Penjualan Lambat:</strong> Rekomendasi diskon (-10%) untuk mempercepat likuiditas kas dan perputaran gudang.<br>
+                3. <strong>Proteksi Margin:</strong> Rekomendasi harga tidak akan pernah melampaui <strong>Harga Minimum</strong> dan <strong>Harga Maksimum</strong> yang telah Anda kunci.
+            </p>
+        </div>
+        <div class="col-12 col-md-4 text-md-end">
+            <span class="badge bg-light text-dark border p-2 text-start">
+                <i class="bi bi-info-circle me-1 text-primary"></i> Evaluasi: 30 Hari Terakhir
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Tabel Rekomendasi Penyesuaian Harga -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0">Daftar Rekomendasi Harga per Produk</h6>
+        <span class="text-muted small">Periode Berjalan</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">SKU & Produk</th>
+                        <th class="text-center">Stok / Laju Jual</th>
+                        <th class="text-center">Saran Aksi</th>
+                        <th class="text-end">Harga Saat Ini</th>
+                        <th class="text-end">Rekomendasi Baru</th>
+                        <th class="text-center">Batas Aman (Min - Max)</th>
+                        <th class="text-center">Margin (Lama &rarr; Baru)</th>
+                        <th class="text-end pe-3">Keputusan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recommendations %}
+                    {% if not r.is_dismissed %}
+                    <tr>
+                        <td class="ps-3">
+                            <div class="fw-bold text-dark">{{ r.nama_produk }}</div>
+                            <span class="font-mono text-muted small">{{ r.sku }}</span>
+                            <div class="text-muted" style="font-size: 0.72rem; max-width: 250px;">{{ r.alasan }}</div>
+                        </td>
+                        <td class="text-center">
+                            <div class="font-mono fw-bold">{{ r.stok_saat_ini }} pcs</div>
+                            <span class="text-muted small" style="font-size: 0.73rem;">{{ r.velocity_per_day }} pcs/hari</span>
+                        </td>
+                        <td class="text-center">
+                            {% if r.action == 'Naikkan Harga' %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success px-2 py-1">
+                                    <i class="bi bi-graph-up-arrow me-1"></i> Naikkan Harga
+                                </span>
+                            {% elif r.action == 'Turunkan Harga' %}
+                                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-2 py-1">
+                                    <i class="bi bi-graph-down-arrow me-1"></i> Turunkan Harga
+                                </span>
+                            {% else %}
+                                <span class="badge bg-light text-secondary border px-2 py-1">Pertahankan</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end font-mono">{{ r.harga_saat_ini|rupiah }}</td>
+                        <td class="text-end font-mono fw-bold">
+                            {% if r.selisih > 0 %}
+                                <span class="text-success">{{ r.harga_saran|rupiah }} (+{{ r.selisih|rupiah }})</span>
+                            {% elif r.selisih < 0 %}
+                                <span class="text-danger">{{ r.harga_saran|rupiah }} ({{ r.selisih|rupiah }})</span>
+                            {% else %}
+                                <span class="text-muted">{{ r.harga_saran|rupiah }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center font-mono small text-secondary">
+                            {{ r.harga_min|rupiah }} – {{ r.harga_max|rupiah }}
+                        </td>
+                        <td class="text-center font-mono">
+                            <span class="text-muted">{{ r.margin_sebelum }}%</span> &rarr;
+                            <span class="fw-bold {% if r.margin_sesudah >= r.margin_sebelum %}text-success{% else %}text-danger{% endif %}">
+                                {{ r.margin_sesudah }}%
+                            </span>
+                        </td>
+                        <td class="text-end pe-3">
+                            {% if session.get('role') == 'pemilik' %}
+                                {% if r.action != 'Pertahankan' %}
+                                <div class="d-flex justify-content-end gap-1">
+                                    <form method="POST" action="{{ url_for('pricing_action') }}">
+                                        <input type="hidden" name="product_id" value="{{ r.product_id }}">
+                                        <input type="hidden" name="action_type" value="terima">
+                                        <input type="hidden" name="harga_baru" value="{{ r.harga_saran }}">
+                                        <input type="hidden" name="alasan" value="{{ r.alasan }}">
+                                        <button type="submit" class="btn btn-success btn-sm py-1 px-2" title="Terapkan Harga Baru">
+                                            <i class="bi bi-check-lg"></i> Terima
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('pricing_action') }}">
+                                        <input type="hidden" name="product_id" value="{{ r.product_id }}">
+                                        <input type="hidden" name="action_type" value="tolak">
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm py-1 px-2" title="Tolak / Sembunyikan Rekomendasi">
+                                            <i class="bi bi-x-lg"></i> Tolak
+                                        </button>
+                                    </form>
+                                </div>
+                                {% else %}
+                                <span class="badge bg-light text-muted border">Stabil</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small"><i class="bi bi-lock me-1"></i>Hanya Pemilik</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">Tidak ada rekomendasi penyesuaian harga aktif saat ini.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Tabel Riwayat Perubahan Harga -->
+<div class="card shadow-sm border-0 bg-white">
+    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history text-secondary me-1"></i> Riwayat Perubahan Harga (Audit Trail)</h6>
+        <span class="text-muted small">Catatan historis persetujuan harga</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.84rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Waktu Perubahan</th>
+                        <th>SKU & Produk</th>
+                        <th class="text-end">Harga Lama</th>
+                        <th class="text-end">Harga Baru</th>
+                        <th class="text-center">Perubahan</th>
+                        <th>Alasan & Keterangan</th>
+                        <th class="pe-3">Otorisasi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in history %}
+                    <tr>
+                        <td class="ps-3 text-nowrap font-mono">{{ h.created_at }}</td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ h.nama_produk }}</div>
+                            <span class="font-mono text-muted small">{{ h.sku }}</span>
+                        </td>
+                        <td class="text-end font-mono">{{ h.harga_lama|rupiah }}</td>
+                        <td class="text-end font-mono fw-bold text-primary">{{ h.harga_baru|rupiah }}</td>
+                        <td class="text-center font-mono">
+                            {% set diff = h.harga_baru - h.harga_lama %}
+                            {% if diff > 0 %}
+                                <span class="text-success fw-bold">+{{ diff|rupiah }}</span>
+                            {% elif diff < 0 %}
+                                <span class="text-danger fw-bold">{{ diff|rupiah }}</span>
+                            {% else %}
+                                <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-secondary">{{ h.alasan }}</td>
+                        <td class="pe-3 small text-muted">{{ h.nama_user or 'Pemilik Toko' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">Belum ada riwayat perubahan harga yang tersimpan.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

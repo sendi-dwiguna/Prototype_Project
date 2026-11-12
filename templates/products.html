@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Manajemen Produk & Stok{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Manajemen Produk & Inventaris</h4>
+        <p class="text-muted small mb-0">Kelola katalog SKU, batas stok minimum, batas harga dinamis, dan lead time supplier</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('stock_adjust') }}" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+            <i class="bi bi-arrow-left-right"></i> Penyesuaian Stok
+        </a>
+        {% if session.get('role') == 'pemilik' %}
+        <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalTambahProduk">
+            <i class="bi bi-plus-circle"></i> Tambah Produk
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                <thead class="table-light border-bottom">
+                    <tr>
+                        <th class="ps-3">SKU & Nama Produk</th>
+                        <th class="text-end">Harga Modal</th>
+                        <th class="text-end">Harga Jual</th>
+                        <th class="text-center">Stok</th>
+                        <th class="text-center">Batas Min</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Batas Dinamis (Min - Max)</th>
+                        <th class="text-center">Lead Time</th>
+                        {% if session.get('role') == 'pemilik' %}
+                        <th class="text-end pe-3">Aksi</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr>
+                        <td class="ps-3">
+                            <div class="fw-bold text-dark">{{ p.nama_produk }}</div>
+                            <span class="font-mono text-muted small">{{ p.sku }}</span>
+                            {% if p.catatan %}
+                            <div class="text-muted text-truncate" style="font-size: 0.72rem; max-width: 200px;">{{ p.catatan }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end font-mono">{{ p.harga_modal|rupiah }}</td>
+                        <td class="text-end font-mono fw-semibold text-primary">{{ p.harga_jual|rupiah }}</td>
+                        <td class="text-center font-mono fw-bold fs-6">{{ p.stok_saat_ini }}</td>
+                        <td class="text-center font-mono text-muted">{{ p.batas_stok_min }}</td>
+                        <td class="text-center">
+                            {% if p.status == 'Kritis' %}
+                                <span class="badge badge-kritis px-2 py-1"><i class="bi bi-x-circle-fill me-1"></i> Kritis</span>
+                            {% elif p.status == 'Waspada' %}
+                                <span class="badge badge-waspada px-2 py-1"><i class="bi bi-exclamation-circle-fill me-1"></i> Waspada</span>
+                            {% else %}
+                                <span class="badge badge-aman px-2 py-1"><i class="bi bi-check-circle-fill me-1"></i> Aman</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center font-mono small text-secondary">
+                            {{ p.harga_min|rupiah }} – {{ p.harga_max|rupiah }}
+                        </td>
+                        <td class="text-center font-mono">{{ p.lead_time_hari }} hari</td>
+                        {% if session.get('role') == 'pemilik' %}
+                        <td class="text-end pe-3">
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEdit{{ p.id }}" title="Ubah Produk">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalHapus{{ p.id }}" title="Hapus Produk">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+
+                            <!-- Modal Edit Produk -->
+                            <div class="modal fade text-start" id="modalEdit{{ p.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <form method="POST" action="{{ url_for('product_edit', product_id=p.id) }}">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title fw-bold">Ubah Produk: {{ p.sku }}</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="row g-3">
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">SKU (Kode Produk)</label>
+                                                        <input type="text" class="form-control" value="{{ p.sku }}" disabled>
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">Nama Produk</label>
+                                                        <input type="text" class="form-control" name="nama_produk" value="{{ p.nama_produk }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">Harga Modal (Rp)</label>
+                                                        <input type="number" step="1000" class="form-control" name="harga_modal" value="{{ p.harga_modal }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">Harga Jual (Rp)</label>
+                                                        <input type="number" step="1000" class="form-control" name="harga_jual" value="{{ p.harga_jual }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-4">
+                                                        <label class="form-label small fw-semibold">Batas Stok Minimum</label>
+                                                        <input type="number" class="form-control" name="batas_stok_min" value="{{ p.batas_stok_min }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-4">
+                                                        <label class="form-label small fw-semibold">Harga Batas Minimum</label>
+                                                        <input type="number" step="1000" class="form-control" name="harga_min" value="{{ p.harga_min }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-4">
+                                                        <label class="form-label small fw-semibold">Harga Batas Maksimum</label>
+                                                        <input type="number" step="1000" class="form-control" name="harga_max" value="{{ p.harga_max }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">Lead Time Supplier (Hari)</label>
+                                                        <input type="number" class="form-control" name="lead_time_hari" value="{{ p.lead_time_hari }}" required>
+                                                    </div>
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label small fw-semibold">Catatan</label>
+                                                        <input type="text" class="form-control" name="catatan" value="{{ p.catatan or '' }}">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                                <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal Konfirmasi Hapus -->
+                            <div class="modal fade text-start" id="modalHapus{{ p.id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <form method="POST" action="{{ url_for('product_delete', product_id=p.id) }}">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title fw-bold text-danger">Konfirmasi Hapus Produk</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <p>Apakah Anda yakin ingin menghapus produk <strong>{{ p.nama_produk }}</strong> ({{ p.sku }})?</p>
+                                                <div class="alert alert-warning small mb-0">
+                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Perhatian: Seluruh riwayat penjualan, log stok, dan histori harga terkait produk ini juga akan terhapus.
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                                <button type="submit" class="btn btn-danger">Hapus Permanen</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">Belum ada produk yang terdaftar.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if session.get('role') == 'pemilik' %}
+<!-- Modal Tambah Produk Baru -->
+<div class="modal fade" id="modalTambahProduk" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('product_create') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Tambah Produk Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">SKU (Kode Unik Produk)</label>
+                            <input type="text" class="form-control" name="sku" placeholder="Contoh: SKU-006" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Nama Produk</label>
+                            <input type="text" class="form-control" name="nama_produk" placeholder="Nama lengkap produk" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Harga Modal / HPP (Rp)</label>
+                            <input type="number" step="1000" class="form-control" name="harga_modal" placeholder="Contoh: 50000" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Harga Jual (Rp)</label>
+                            <input type="number" step="1000" class="form-control" name="harga_jual" placeholder="Contoh: 85000" required>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-semibold">Stok Saat Ini (Unit)</label>
+                            <input type="number" class="form-control" name="stok_saat_ini" value="0" required>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-semibold">Batas Stok Minimum</label>
+                            <input type="number" class="form-control" name="batas_stok_min" value="10" required>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small fw-semibold">Lead Time Supplier (Hari)</label>
+                            <input type="number" class="form-control" name="lead_time_hari" value="7" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Harga Minimum Dynamic Pricing</label>
+                            <input type="number" step="1000" class="form-control" name="harga_min" placeholder="Batas bawah harga diskon" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small fw-semibold">Harga Maksimum Dynamic Pricing</label>
+                            <input type="number" step="1000" class="form-control" name="harga_max" placeholder="Batas atas kenaikan harga" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Catatan / Kategori</label>
+                            <input type="text" class="form-control" name="catatan" placeholder="Keterangan tambahan produk">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan Produk Baru</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

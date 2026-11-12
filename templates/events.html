@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Manajemen Event Khusus{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Manajemen Event Khusus & Promo</h4>
+        <p class="text-muted small mb-0">Atur kampanye belanja (11.11, 12.12, Ramadan) dan faktor lonjakan permintaan untuk kalkulasi restock</p>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalTambahEvent">
+        <i class="bi bi-plus-circle"></i> Tambah Event Baru
+    </button>
+</div>
+
+<div class="row g-3">
+    <!-- Tabel Event Aktif -->
+    <div class="col-12 col-lg-8">
+        <div class="card shadow-sm border-0 bg-white">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Nama Event</th>
+                                <th class="text-center">Faktor Pengali</th>
+                                <th class="text-center">Periode Berlaku</th>
+                                <th>Keterangan</th>
+                                <th class="text-end pe-3">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ev in events %}
+                            <tr>
+                                <td class="ps-3 fw-bold text-dark">{{ ev.nama_event }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary font-mono fs-6 px-2 py-1">
+                                        {{ ev.faktor_pengali }}x (+{{ ((ev.faktor_pengali - 1.0) * 100)|round|int }}%)
+                                    </span>
+                                </td>
+                                <td class="text-center font-mono small text-secondary">
+                                    {{ ev.tanggal_mulai|tgl_indo }} s.d {{ ev.tanggal_selesai|tgl_indo }}
+                                </td>
+                                <td class="small text-secondary">{{ ev.deskripsi or '-' }}</td>
+                                <td class="text-end pe-3">
+                                    <form method="POST" action="{{ url_for('event_delete', event_id=ev.id) }}" onsubmit="return confirm('Hapus event {{ ev.nama_event }}?')">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm py-1 px-2" title="Hapus Event">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">Belum ada event promosi yang ditambahkan.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel Informasi -->
+    <div class="col-12 col-lg-4">
+        <div class="card p-3 shadow-sm border-0 bg-white">
+            <h6 class="fw-bold mb-2"><i class="bi bi-lightbulb text-warning me-1"></i> Cara Kerja Pengali Event</h6>
+            <p class="small text-muted mb-3">
+                Faktor pengali digunakan oleh modul <strong>Prediksi Kebutuhan Restock</strong> untuk mengantisipasi lonjakan permintaan selama periode kampanye belanja besar.
+            </p>
+            <ul class="small text-secondary ps-3 mb-0">
+                <li class="mb-1"><strong>1.25x (+25%):</strong> Cocok untuk Payday Sale akhir pekan.</li>
+                <li class="mb-1"><strong>1.50x (+50%):</strong> Kampanye ganda nasional seperti 9.9, 10.10, 11.11, 12.12.</li>
+                <li><strong>1.60x - 2.0x (+60% s.d +100%):</strong> Peak season seperti Bulan Ramadan & Menjelang Hari Raya Idul Fitri.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Tambah Event -->
+<div class="modal fade" id="modalTambahEvent" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('events_management') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Tambah Event Promosi Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nama Event</label>
+                        <input type="text" class="form-control" name="nama_event" placeholder="Contoh: Flash Sale 12.12 Harbolnas" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Faktor Pengali Lonjakan Permintaan</label>
+                        <input type="number" step="0.05" min="1.0" max="5.0" class="form-control" name="faktor_pengali" value="1.50" required>
+                        <div class="form-text small">Contoh: 1.50 berarti permintaan diperkirakan naik 50% di atas baseline normal.</div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Tanggal Mulai</label>
+                            <input type="date" class="form-control" name="tanggal_mulai" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Tanggal Selesai</label>
+                            <input type="date" class="form-control" name="tanggal_selesai" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Deskripsi / Catatan Kampanye</label>
+                        <input type="text" class="form-control" name="deskripsi" placeholder="Keterangan singkat kampanye">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

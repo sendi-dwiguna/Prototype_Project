@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Penyesuaian Stok & Log Riwayat{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Penyesuaian Stok & Log Riwayat</h4>
+        <p class="text-muted small mb-0">Catat penerimaan stok masuk supplier, stock opname fisik, atau koreksi barang rusak</p>
+    </div>
+    <a href="{{ url_for('products_list') }}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
+        <i class="bi bi-arrow-left"></i> Kembali ke Katalog Produk
+    </a>
+</div>
+
+<div class="row g-3">
+    <!-- Form Penyesuaian Stok -->
+    <div class="col-12 col-lg-4">
+        <div class="card p-3 shadow-sm border-0 bg-white">
+            <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square text-primary me-1"></i> Form Penyesuaian</h6>
+            
+            <form method="POST" action="{{ url_for('stock_adjust') }}">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Pilih Produk</label>
+                    <select class="form-select" name="product_id" required>
+                        <option value="" disabled selected>-- Pilih Produk --</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}">{{ p.sku }} - {{ p.nama_produk }} (Stok: {{ p.stok_saat_ini }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Jenis Penyesuaian</label>
+                    <select class="form-select" name="jenis_perubahan" id="jenisPerubahan" required onchange="updateLabel()">
+                        <option value="Masuk">Tambah Stok Masuk (Restock / Pembelian)</option>
+                        <option value="Stock Opname">Stock Opname (Tetapkan Jumlah Fisik Aktual)</option>
+                        <option value="Keluar">Koreksi Stok Keluar (Rusak / Hilang / Kadaluarsa)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" id="jumlahLabel">Jumlah Unit Masuk</label>
+                    <input type="number" min="0" class="form-control" name="jumlah" id="jumlahInput" required placeholder="Masukkan jumlah unit">
+                    <div class="form-text small" id="jumlahHelp">Tambahkan jumlah unit yang baru diterima dari supplier.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Keterangan / Nomor Dokumen</label>
+                    <input type="text" class="form-control" name="keterangan" placeholder="Contoh: Surat Jalan SJ-091 atau Hasil Opname Gudang A" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                    <i class="bi bi-check-circle me-1"></i> Simpan Penyesuaian Stok
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabel Riwayat Perubahan Stok (Log) -->
+    <div class="col-12 col-lg-8">
+        <div class="card p-3 shadow-sm border-0 bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-clock-history text-secondary me-1"></i> Riwayat Audit Perubahan Stok</h6>
+                <span class="text-muted small">25 entri mutasi terakhir</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 0.84rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Waktu & Pengguna</th>
+                            <th>Produk</th>
+                            <th>Jenis Perubahan</th>
+                            <th class="text-center">Mutasi</th>
+                            <th class="text-center">Stok (Sebelum &rarr; Sesudah)</th>
+                            <th>Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td class="text-nowrap">
+                                <div class="fw-semibold text-dark">{{ log.created_at }}</div>
+                                <span class="text-muted small">{{ log.nama_user or 'Sistem' }}</span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ log.nama_produk }}</div>
+                                <span class="font-mono text-muted small">{{ log.sku }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ log.jenis_perubahan }}</span>
+                            </td>
+                            <td class="text-center font-mono fw-bold">
+                                {% if log.jumlah_perubahan > 0 %}
+                                    <span class="text-success">+{{ log.jumlah_perubahan }}</span>
+                                {% elif log.jumlah_perubahan < 0 %}
+                                    <span class="text-danger">{{ log.jumlah_perubahan }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center font-mono">
+                                <span class="text-muted">{{ log.stok_sebelum }}</span> &rarr; <span class="fw-bold text-dark">{{ log.stok_sesudah }}</span>
+                            </td>
+                            <td class="small text-secondary">{{ log.keterangan or '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">Belum ada mutasi stok yang tercatat.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateLabel() {
+    const j = document.getElementById('jenisPerubahan').value;
+    const lbl = document.getElementById('jumlahLabel');
+    const hlp = document.getElementById('jumlahHelp');
+
+    if (j === 'Masuk') {
+        lbl.innerText = 'Jumlah Unit Masuk';
+        hlp.innerText = 'Tambahkan jumlah unit yang baru diterima dari supplier.';
+    } else if (j === 'Stock Opname') {
+        lbl.innerText = 'Jumlah Stok Fisik Riil';
+        hlp.innerText = 'Stok saat ini akan digantikan secara langsung dengan jumlah ini.';
+    } else {
+        lbl.innerText = 'Jumlah Unit Keluar';
+        hlp.innerText = 'Jumlah unit yang akan dikurangkan dari stok.';
+    }
+}
+</script>
+{% endblock %}

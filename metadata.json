@@ -1,0 +1,7 @@
+{
+  "name": "Restokin - Prediksi Restock & Dynamic Pricing",
+  "description": "Sistem Prediksi Restock dan Dynamic Pricing untuk Online Shop dengan forecasting demand, reorder point, manajemen stok, dan RBAC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

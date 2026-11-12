@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Pencatatan & Impor Penjualan{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Pencatatan & Impor Data Penjualan</h4>
+        <p class="text-muted small mb-0">Catat transaksi penjualan harian atau impor massal melalui berkas CSV / Excel</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-success btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalImportSales">
+            <i class="bi bi-file-earmark-arrow-up"></i> Impor CSV / Excel
+        </button>
+        <button type="button" class="btn btn-primary btn-sm d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalManualSale">
+            <i class="bi bi-plus-circle"></i> Input Penjualan Manual
+        </button>
+    </div>
+</div>
+
+<!-- Filter Pencarian Riwayat Penjualan -->
+<div class="card p-3 mb-3 shadow-sm border-0 bg-white">
+    <form method="GET" action="{{ url_for('sales_list') }}" class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold text-secondary">Filter Produk</label>
+            <select name="product_id" class="form-select form-select-sm">
+                <option value="">-- Semua Produk --</option>
+                {% for p in products %}
+                <option value="{{ p.id }}" {% if filter_product == p.id|string %}selected{% endif %}>{{ p.sku }} - {{ p.nama_produk }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-secondary">Dari Tanggal</label>
+            <input type="date" name="start_date" class="form-control form-select-sm" value="{{ start_date }}">
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-secondary">Sampai Tanggal</label>
+            <input type="date" name="end_date" class="form-control form-select-sm" value="{{ end_date }}">
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search me-1"></i> Filter</button>
+            <a href="{{ url_for('sales_list') }}" class="btn btn-outline-secondary btn-sm" title="Reset Filter"><i class="bi bi-arrow-clockwise"></i></a>
+        </div>
+    </form>
+</div>
+
+<!-- Tabel Riwayat Penjualan -->
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                <thead class="table-light border-bottom">
+                    <tr>
+                        <th class="ps-3">Tanggal</th>
+                        <th>SKU & Produk</th>
+                        <th class="text-center">Jumlah Terjual</th>
+                        <th class="text-end">Harga Satuan</th>
+                        <th class="text-end">Total Omzet</th>
+                        <th>Catatan / Saluran</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sales %}
+                    <tr>
+                        <td class="ps-3 text-nowrap font-mono">{{ s.tanggal_penjualan|tgl_indo }}</td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ s.nama_produk }}</div>
+                            <span class="font-mono text-muted small">{{ s.sku }}</span>
+                        </td>
+                        <td class="text-center font-mono fw-bold fs-6">{{ s.jumlah_terjual }} pcs</td>
+                        <td class="text-end font-mono">{{ s.harga_satuan|rupiah }}</td>
+                        <td class="text-end font-mono fw-bold text-success">{{ s.total_harga|rupiah }}</td>
+                        <td class="small text-secondary">{{ s.catatan or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">Belum ada transaksi penjualan sesuai kriteria filter.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Input Penjualan Manual -->
+<div class="modal fade" id="modalManualSale" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('sales_list') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Input Penjualan Manual</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Pilih Produk Terjual</label>
+                        <select name="product_id" class="form-select" required>
+                            <option value="" disabled selected>-- Pilih Produk --</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}">{{ p.sku }} - {{ p.nama_produk }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Jumlah Terjual (Unit)</label>
+                        <input type="number" min="1" class="form-control" name="jumlah_terjual" value="1" required>
+                        <div class="form-text small">Stok produk terkait akan otomatis dikurangi sejumlah ini.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Tanggal Penjualan</label>
+                        <input type="date" class="form-control" name="tanggal_penjualan" value="{{ now_date }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Catatan / Saluran Penjualan</label>
+                        <input type="text" class="form-control" name="catatan" placeholder="Contoh: Shopee, Tokopedia, Toko Offline, WA">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan Transaksi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Impor CSV / Excel -->
+<div class="modal fade" id="modalImportSales" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('sales_import') }}" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Impor Data Penjualan Massal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <h6 class="fw-bold mb-1"><i class="bi bi-info-circle-fill me-1"></i> Petunjuk & Syarat Berkas:</h6>
+                        <ul class="mb-2 ps-3">
+                            <li>Format berkas yang diterima: <strong>.csv (UTF-8)</strong> atau <strong>.xlsx</strong> (Maksimal 5 MB).</li>
+                            <li>Kolom Wajib: <code>SKU</code>, <code>Jumlah</code>, <code>Tanggal</code>. Kolom opsional: <code>Catatan</code>.</li>
+                            <li>Format Tanggal: <code>dd-mm-yyyy</code> (misal: <code>25-10-2026</code>) atau <code>yyyy-mm-dd</code>.</li>
+                            <li>Validasi ketat: jika ada SKU yang tidak terdaftar, kuantitas minus, atau tanggal tidak valid, sistem akan menampilkan baris dan kolom yang salah secara detail.</li>
+                        </ul>
+                        <div class="d-flex gap-2 mt-2">
+                            <a href="{{ url_for('download_sales_template', fmt='csv') }}" class="btn btn-sm btn-outline-dark bg-white">
+                                <i class="bi bi-download me-1"></i> Unduh Template CSV
+                            </a>
+                            <a href="{{ url_for('download_sales_template', fmt='xlsx') }}" class="btn btn-sm btn-outline-dark bg-white">
+                                <i class="bi bi-download me-1"></i> Unduh Template Excel (.xlsx)
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Pilih Berkas CSV / Excel</label>
+                        <input type="file" class="form-control" name="file_sales" accept=".csv, .xlsx" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-success">Unggah & Validasi Impor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

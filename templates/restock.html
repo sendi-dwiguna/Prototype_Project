@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Prediksi Restock (Forecasting){% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+        <h4 class="fw-bold mb-0 text-slate-900">Prediksi Kebutuhan Restock (Forecasting)</h4>
+        <p class="text-muted small mb-0">Estimasi permintaan masa depan dengan Moving Average, Exponential Smoothing, dan lonjakan event promosi</p>
+    </div>
+    {% if session.get('role') == 'pemilik' %}
+    <a href="{{ url_for('events_management') }}" class="btn btn-outline-primary btn-sm d-flex align-items-center gap-1">
+        <i class="bi bi-calendar-event"></i> Kelola Event Khusus
+    </a>
+    {% endif %}
+</div>
+
+<!-- Panel Konfigurasi Prediksi -->
+<div class="card p-3 mb-4 shadow-sm border-0 bg-white">
+    <form method="GET" action="{{ url_for('restock_forecasting') }}" class="row g-3 align-items-end">
+        <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold text-secondary">Pilih Produk Analisis</label>
+            <select name="product_id" class="form-select" onchange="this.form.submit()">
+                {% for p in products %}
+                <option value="{{ p.id }}" {% if selected_product and selected_product.id == p.id %}selected{% endif %}>
+                    {{ p.sku }} - {{ p.nama_produk }} (Stok: {{ p.stok_saat_ini }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold text-secondary">Periode Analisis</label>
+            <select name="periode" class="form-select" onchange="this.form.submit()">
+                <option value="Bulanan" {% if periode_tipe == 'Bulanan' %}selected{% endif %}>Bulanan</option>
+                <option value="Mingguan" {% if periode_tipe == 'Mingguan' %}selected{% endif %}>Mingguan</option>
+            </select>
+        </div>
+
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold text-secondary">Metode Peramalan Utama</label>
+            <select name="metode" class="form-select" onchange="this.form.submit()">
+                <option value="Moving Average" {% if metode_pilihan == 'Moving Average' %}selected{% endif %}>Moving Average (N=3)</option>
+                <option value="Exponential Smoothing" {% if metode_pilihan == 'Exponential Smoothing' %}selected{% endif %}>Exponential Smoothing (α=0.3)</option>
+            </select>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label class="form-label small fw-semibold text-secondary">Sertakan Event Promosi</label>
+            <select name="event_id" class="form-select" onchange="this.form.submit()">
+                <option value="">Normal (Tanpa Event - 1.0x)</option>
+                {% for ev in events %}
+                <option value="{{ ev.id }}" {% if event_id == ev.id|string %}selected{% endif %}>
+                    {{ ev.nama_event }} (+{{ ((ev.faktor_pengali - 1.0) * 100)|round|int }}% / {{ ev.faktor_pengali }}x)
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if not forecast_data or not forecast_data.cukup_data %}
+<!-- Peringatan Jika Data Kurang dari 3 Periode -->
+<div class="card p-4 shadow-sm border-warning bg-warning bg-opacity-10 text-center">
+    <div class="text-warning mb-2"><i class="bi bi-exclamation-triangle-fill fs-1"></i></div>
+    <h5 class="fw-bold text-dark">Data Penjualan Belum Memenuhi Syarat Minimal</h5>
+    <p class="text-secondary mb-3">
+        {{ forecast_data.pesan if forecast_data else 'Produk ini belum memiliki riwayat penjualan yang cukup untuk analisis peramalan ilmiah.' }}
+    </p>
+    <div>
+        <a href="{{ url_for('sales_list') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i> Input / Impor Data Penjualan
+        </a>
+    </div>
+</div>
+{% else %}
+
+<!-- Hasil Perhitungan Utama -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card p-3 shadow-sm border-0 bg-white h-100">
+            <span class="text-muted small fw-medium mb-1">Prediksi Permintaan (Demand)</span>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="fs-2 fw-bold font-mono text-primary">{{ forecast_data.demand_prediksi_final }}</span>
+                <span class="text-muted small">unit / {{ periode_tipe|lower }}</span>
+            </div>
+            <div class="text-muted small mt-1">
+                Basis: {{ forecast_data.next_ma if metode_pilihan == 'Moving Average' else forecast_data.next_es }} × Pengali {{ event_multiplier }}x
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card p-3 shadow-sm border-0 bg-white h-100">
+            <span class="text-muted small fw-medium mb-1">Safety Stock (Cadangan Aman)</span>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="fs-2 fw-bold font-mono text-secondary">{{ forecast_data.safety_stock }}</span>
+                <span class="text-muted small">unit</span>
+            </div>
+            <div class="text-muted small mt-1">
+                Z-Score 95% (1.65) × Deviasi {{ forecast_data.std_dev }}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card p-3 shadow-sm border-0 bg-white h-100">
+            <span class="text-muted small fw-medium mb-1">Titik Pemesanan (Reorder Point)</span>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="fs-2 fw-bold font-mono text-warning">{{ forecast_data.rop }}</span>
+                <span class="text-muted small">unit</span>
+            </div>
+            <div class="text-muted small mt-1">
+                Lead Time: {{ selected_product.lead_time_hari }} hari (Demand LT + Safety)
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card p-3 shadow-sm border-0 bg-white h-100 border-start border-4 border-success">
+            <span class="text-muted small fw-medium mb-1">Rekomendasi Jumlah Restock</span>
+            <div class="d-flex align-items-baseline gap-2">
+                <span class="fs-2 fw-bold font-mono text-success">+{{ forecast_data.rekomendasi_restock }}</span>
+                <span class="text-muted small">unit</span>
+            </div>
+            <div class="text-muted small mt-1">
+                Stok saat ini: {{ selected_product.stok_saat_ini }} unit
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tombol Eksekusi Restock -->
+<div class="card p-3 mb-4 shadow-sm border-success bg-success bg-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div>
+        <h6 class="fw-bold text-success mb-1"><i class="bi bi-box-arrow-in-down me-1"></i> Siap Menjalankan Pemesanan Restock?</h6>
+        <p class="small text-secondary mb-0">
+            Klik tombol di samping untuk mengeksekusi rekomendasi penambahan stok <strong>+{{ forecast_data.rekomendasi_restock }} unit</strong> ke dalam inventaris gudang dan mencatatnya ke log audit.
+        </p>
+    </div>
+    <form method="POST" action="{{ url_for('restock_execute') }}">
+        <input type="hidden" name="product_id" value="{{ selected_product.id }}">
+        <input type="hidden" name="jumlah_restock" value="{{ forecast_data.rekomendasi_restock }}">
+        <input type="hidden" name="metode_peramalan" value="{{ metode_pilihan }}">
+        <input type="hidden" name="event_applied" value="{{ active_event_name }}">
+        
+        <button type="submit" class="btn btn-success fw-semibold px-4 text-nowrap" {% if forecast_data.rekomendasi_restock <= 0 %}disabled{% endif %}>
+            <i class="bi bi-check2-circle me-1"></i> Tandai Sudah Dijalankan
+        </button>
+    </form>
+</div>
+
+<!-- Perbandingan Akurasi Metode (MAD & MAPE) -->
+<div class="card p-3 mb-4 shadow-sm border-0 bg-white">
+    <h6 class="fw-bold mb-3"><i class="bi bi-clipboard-data text-primary me-1"></i> Evaluasi & Perbandingan Akurasi Metode</h6>
+    <div class="table-responsive">
+        <table class="table table-bordered text-center align-middle mb-0" style="font-size: 0.88rem;">
+            <thead class="table-light">
+                <tr>
+                    <th class="text-start">Metode Peramalan</th>
+                    <th>Prediksi Periode Depan</th>
+                    <th>MAD (Mean Absolute Deviation)</th>
+                    <th>MAPE (Mean Absolute Percentage Error)</th>
+                    <th>Status Akurasi Rekomendasi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr {% if forecast_data.ma_mape <= forecast_data.es_mape %}class="table-success bg-opacity-25"{% endif %}>
+                    <td class="text-start fw-semibold">
+                        Moving Average (N=3)
+                        {% if forecast_data.ma_mape <= forecast_data.es_mape %}
+                        <span class="badge bg-success ms-1">Paling Akurat</span>
+                        {% endif %}
+                    </td>
+                    <td class="font-mono fw-bold">{{ forecast_data.next_ma }} unit</td>
+                    <td class="font-mono">{{ forecast_data.ma_mad }}</td>
+                    <td class="font-mono fw-bold">{{ forecast_data.ma_mape }}%</td>
+                    <td class="small">
+                        {% if forecast_data.ma_mape < 10 %}
+                            <span class="text-success fw-bold">Sangat Baik (&lt;10%)</span>
+                        {% elif forecast_data.ma_mape < 20 %}
+                            <span class="text-primary">Baik (10% - 20%)</span>
+                        {% else %}
+                            <span class="text-warning">Cukup Wajar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr {% if forecast_data.es_mape < forecast_data.ma_mape %}class="table-success bg-opacity-25"{% endif %}>
+                    <td class="text-start fw-semibold">
+                        Exponential Smoothing (α=0.3)
+                        {% if forecast_data.es_mape < forecast_data.ma_mape %}
+                        <span class="badge bg-success ms-1">Paling Akurat</span>
+                        {% endif %}
+                    </td>
+                    <td class="font-mono fw-bold">{{ forecast_data.next_es }} unit</td>
+                    <td class="font-mono">{{ forecast_data.es_mad }}</td>
+                    <td class="font-mono fw-bold">{{ forecast_data.es_mape }}%</td>
+                    <td class="small">
+                        {% if forecast_data.es_mape < 10 %}
+                            <span class="text-success fw-bold">Sangat Baik (&lt;10%)</span>
+                        {% elif forecast_data.es_mape < 20 %}
+                            <span class="text-primary">Baik (10% - 20%)</span>
+                        {% else %}
+                            <span class="text-warning">Cukup Wajar</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="form-text small mt-2">
+        * <strong>MAD</strong> mengukur rata-rata besaran deviasi absolut kesalahan peramalan dalam satuan unit.
+        * <strong>MAPE</strong> mengukur persentase rata-rata deviasi relatif kesalahan terhadap penjualan riil. Nilai MAPE yang lebih rendah menandakan metode yang lebih akurat.
+    </div>
+</div>
+
+<!-- Tabel Rincian Periode Historis -->
+<div class="card p-3 shadow-sm border-0 bg-white">
+    <h6 class="fw-bold mb-3">Tabel Historis Penjualan & Nilai Peramalan per Periode</h6>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+            <thead class="table-light">
+                <tr>
+                    <th>Periode</th>
+                    <th class="text-center">Penjualan Riil (Aktual)</th>
+                    <th class="text-center">Moving Average (N=3)</th>
+                    <th class="text-center">Exponential Smoothing (α=0.3)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in range(forecast_data.period_labels|length) %}
+                <tr>
+                    <td class="fw-semibold font-mono">{{ forecast_data.period_labels[i] }}</td>
+                    <td class="text-center font-mono fw-bold">{{ forecast_data.actuals[i] }} unit</td>
+                    <td class="text-center font-mono text-muted">
+                        {{ forecast_data.ma_forecasts[i] if forecast_data.ma_forecasts[i] is not none else '-' }}
+                    </td>
+                    <td class="text-center font-mono text-muted">
+                        {{ forecast_data.es_forecasts[i] if forecast_data.es_forecasts[i] is not none else '-' }}
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr class="table-primary fw-bold">
+                    <td>Periode Depan (Proyeksi)</td>
+                    <td class="text-center text-muted font-mono">-</td>
+                    <td class="text-center font-mono">{{ forecast_data.next_ma }} unit</td>
+                    <td class="text-center font-mono">{{ forecast_data.next_es }} unit</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
